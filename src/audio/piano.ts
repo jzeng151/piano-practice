@@ -1,4 +1,4 @@
-import { SplendidGrandPiano } from 'smplr';
+import { SplendidGrandPiano, LAYERS } from 'smplr';
 
 // Voice model over an injected player so the bookkeeping is unit-testable:
 // one voice per keydown instance; re-striking a sounding pitch stops the prior
@@ -106,7 +106,7 @@ export class Piano {
       // as a fragment even when encoded. Files are vendored with '#' renamed
       // to '_sharp_' (scripts/fetch-samples.mjs); rewrite requests to match.
       storage: {
-        fetch: (url: string) => fetch(url.replaceAll('%23', '_sharp_').replaceAll('#', '_sharp_')),
+        fetch: (url: string) => fetch(sharpSafe(url)),
       },
     });
     this.loadPromise = this.instrument.load.then(() => undefined);
@@ -194,4 +194,47 @@ export class Piano {
     this.panic();
     await this.context.close();
   }
+}
+
+export interface SampleHealth {
+  tested: number;
+  failed: number;
+  format: string;
+  firstError: string | null;
+}
+
+/** Rewrite '#' the same way the vendored files are named on disk. */
+function sharpSafe(url: string): string {
+  return url.replaceAll('%23', '_sharp_').replaceAll('#', '_sharp_');
+}
+
+/**
+ * Fetch + decode a representative subset of the piano samples in THIS
+ * browser. smplr silently omits failed buffers (keys just go quiet), so this
+ * is the only way a user ever learns their environment can't load/decode the
+ * samples — surfaced as a banner in the practice setup.
+ */
+export async function checkSampleHealth(context: AudioContext): Promise<SampleHealth> {
+  const names = [...new Set(LAYERS.flatMap((l) => l.samples.map(([, n]) => String(n))))];
+  const step = Math.max(1, Math.floor(names.length / 12));
+  const pick = names.filter((_, i) => i % step === 0).slice(0, 12);
+  // mirror smplr's format choice: ogg unless the browser can't play it
+  const probe = document.createElement('audio');
+  const format = probe.canPlayType('audio/ogg; codecs="opus"') ? 'ogg' : 'm4a';
+  const base = `${import.meta.env.BASE_URL}samples/splendid-grand-piano`;
+  let failed = 0;
+  let firstError: string | null = null;
+  for (const name of pick) {
+    try {
+      const res = await fetch(sharpSafe(`${base}/${encodeURIComponent(name)}.${format}`));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const type = res.headers.get('content-type') ?? '';
+      if (type.includes('html')) throw new Error('got HTML instead of audio');
+      await context.decodeAudioData(await res.arrayBuffer());
+    } catch (e) {
+      failed++;
+      firstError ??= `${name}.${format}: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  return { tested: pick.length, failed, format, firstError };
 }

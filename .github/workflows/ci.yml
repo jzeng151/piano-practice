@@ -18,10 +18,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: public/samples
-          key: splendid-grand-piano-v1
+          key: splendid-grand-piano-v2-both-formats
       - run: node scripts/fetch-samples.mjs
-      - name: Sample assets present
-        run: test "$(ls public/samples/splendid-grand-piano/*.ogg | wc -l)" -ge 200
+      - name: Sample assets present (both formats)
+        run: test "$(ls public/samples/splendid-grand-piano/*.ogg public/samples/splendid-grand-piano/*.m4a | wc -l)" -ge 400
       - run: npx tsc -b
       - run: npx eslint .
       - run: npx vitest run

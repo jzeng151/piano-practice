@@ -9,6 +9,7 @@ import {
   subscribePianoProgress,
   type PracticeConfig,
 } from '../practice/controller';
+import { checkSampleHealth, type SampleHealth } from '../audio/piano';
 import type { GuideMode, HandFilter } from '../engine/clock';
 import { midiToName, WINDOW_SPAN } from '../input/keyboard';
 import { getBuiltinSong } from '../songs/library';
@@ -188,8 +189,21 @@ function ConfigPopover({
   }
   const progress = useSyncExternalStore(subscribePianoProgress, getPianoProgress);
   const [decoded, setDecoded] = useState(false);
+  const [health, setHealth] = useState<SampleHealth | null>(null);
   const previewRef = useRef<PracticeController | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    checkSampleHealth(getPiano().context)
+      .then((h) => {
+        if (!cancelled) setHealth(h);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Live keys behind the popover: a preview controller in idle state —
   // audio is FSM-independent, so pressing keys sounds immediately.
@@ -227,6 +241,12 @@ function ConfigPopover({
           </h1>
           {firstRun && <MappingDiagram />}
           <AudioBlockedBanner />
+          {health && health.failed > 0 && (
+            <p className="banner" role="alert">
+              ⚠ {health.failed} of {health.tested} piano sound files failed to load in this
+              browser ({health.firstError}). Keys will be partly or fully silent.
+            </p>
+          )}
           <p className="hint">
             The keyboard behind this dialog is live — try pressing some keys.
             {latency && (
