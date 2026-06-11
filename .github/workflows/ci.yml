@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Vendor piano samples (cached)
+        uses: actions/cache@v4
+        with:
+          path: public/samples
+          key: splendid-grand-piano-v1
+      - run: node scripts/fetch-samples.mjs
+      - name: Sample assets present
+        run: test "$(ls public/samples/splendid-grand-piano/*.ogg | wc -l)" -ge 200
+      - run: npx tsc -b
+      - run: npx eslint .
+      - run: npx vitest run
+      - run: npm run build
