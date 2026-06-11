@@ -1,6 +1,6 @@
 import type { CompiledSong, NoteGroup } from '../songs/types';
 import type { InputEvent } from '../input/types';
-import { Scorer, type ScoreCounts, type Judgment } from './scorer';
+import { Scorer, SCORE_WINDOW_REAL_SEC, type ScoreCounts, type Judgment } from './scorer';
 import { handMatches } from './scorer';
 
 export type GuideMode = 'wait' | 'scroll';
@@ -98,9 +98,9 @@ export class Engine {
   private wrongPresses = 0;
   private wrongFlashes: WrongFlash[] = [];
 
-  // count-in clicks (real-time offsets from start, ms)
+  // count-in clicks (offsets in PLAYING-time ms from start)
   private pendingClicks: { atRealMs: number; accent: boolean }[] = [];
-  private startRealMs = 0;
+  private playingRealMs = 0;
 
   // A-B loop
   private loopA: number | null = null;
@@ -144,7 +144,7 @@ export class Engine {
     if (this.state !== 'idle') return;
     const leadReal = this.leadInRealSec();
     this.songTime = -leadReal * this.speed;
-    this.startRealMs = performance.now();
+    this.playingRealMs = 0;
     this.lastNow = null;
     if (this.mode === 'scroll' && this.countIn) {
       const bpm = this.compiled.song.tempoMap[0]?.bpm ?? 120;
@@ -184,19 +184,27 @@ export class Engine {
   tick(now: number): void {
     if (this.state === 'playing') {
       if (this.lastNow !== null) {
-        const dt = (now - this.lastNow) / 1000;
-        this.songTime += dt * this.speed;
-        this.elapsedRealMs += now - this.lastNow;
+        const dtMs = now - this.lastNow;
+        this.songTime += (dtMs / 1000) * this.speed;
+        this.elapsedRealMs += dtMs;
+        this.playingRealMs += dtMs;
       }
       this.lastNow = now;
 
-      // count-in clicks
-      while (this.pendingClicks.length > 0 && now - this.startRealMs >= this.pendingClicks[0].atRealMs) {
+      // count-in clicks — consumed against PLAYING time only, so pausing
+      // mid-lead-in can't burst the remaining clicks on resume
+      while (this.pendingClicks.length > 0 && this.playingRealMs >= this.pendingClicks[0].atRealMs) {
         const c = this.pendingClicks.shift()!;
         this.audio.click(c.accent);
       }
 
       this.runAutoplay();
+
+      // A-B loop wrap FIRST — a B marker at or before the next gate's start
+      // must wrap instead of arming the gate (else the loop silently stops)
+      if (this.loopA !== null && this.loopB !== null && this.songTime >= this.loopB) {
+        this.jumpTo(this.loopA);
+      }
 
       if (this.mode === 'wait') {
         const next = this.gateGroups[this.nextGate];
@@ -212,11 +220,6 @@ export class Engine {
         if (this.songTime >= this.compiled.durationSec && this.scorer.done(this.songTime)) {
           this.finish();
         }
-      }
-
-      // A-B loop wrap
-      if (this.loopA !== null && this.loopB !== null && this.songTime >= this.loopB) {
-        this.jumpTo(this.loopA);
       }
 
       this.bump();
@@ -248,7 +251,13 @@ export class Engine {
       if (this.state === 'waiting') {
         this.struckSinceArm.add(e.midi);
         this.evaluateGate(e.midi);
-      } else if (this.state === 'playing' && this.mode === 'scroll' && this.songTime >= 0) {
+      } else if (
+        this.state === 'playing' &&
+        this.mode === 'scroll' &&
+        // the first note's ±window straddles songTime 0 — accept early
+        // presses during the tail of the lead-in
+        this.songTime >= -SCORE_WINDOW_REAL_SEC * this.speed
+      ) {
         const judgment = this.scorer.press(e.midi, this.songTime);
         if (judgment === 'wrong') {
           this.wrongPresses++;

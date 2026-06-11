@@ -201,12 +201,15 @@ export function parseMusicXml(xml: string, id: string, fallbackTitle: string): P
         const midi = (octave + 1) * 12 + STEP_SEMITONES[step] + alter;
         if (midi < 0 || midi > 127) continue;
 
-        // tie stop extends the previous same-pitch note it abuts
+        // tie stop extends the previous same-pitch note it abuts; tolerance
+        // scales with division coarseness so rounding across a mid-part
+        // <divisions> change can't break the merge
+        const tieTolerance = Math.max(2, Math.ceil(XML_PPQ / divisions / 64));
         const tieTypes = children(el, 'tie').map((t) => attrsOf(t)['type']);
         if (tieTypes.includes('stop')) {
           const prev = [...notes]
             .reverse()
-            .find((n) => n.midi === midi && Math.abs(n.startTick + n.durationTick - startTick) <= 2);
+            .find((n) => n.midi === midi && Math.abs(n.startTick + n.durationTick - startTick) <= tieTolerance);
           if (prev) {
             prev.durationTick += Math.max(1, Math.round(durTicks));
             continue;

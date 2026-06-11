@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { parseInWorker } from '../songs/importClient';
 import { contentHash, getSong, putSong, storageAvailable, SCHEMA_VERSION, COMPILER_VERSION, type StoredSong } from '../storage/db';
@@ -32,9 +32,9 @@ export default function Import() {
   const backupRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
-  useState(() => {
+  useEffect(() => {
     storageAvailable().then(setStorageOk);
-  });
+  }, []);
 
   const store = useCallback(async (p: PendingRecord, extraWarnings: ImportWarning[] = []) => {
     const record: StoredSong = {

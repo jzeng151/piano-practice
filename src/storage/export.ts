@@ -4,7 +4,7 @@ import { SongFormatError } from '../songs/types';
 
 export const BACKUP_FORMAT_VERSION = 1;
 const MAX_BACKUP_SONGS = 500;
-const MAX_B64_BYTES = 30 * 1024 * 1024; // per song, base64 length cap
+const MAX_RAW_BYTES_PER_SONG = 30 * 1024 * 1024; // decoded size cap per song
 
 interface BackupSongEntry {
   id: string;
@@ -89,7 +89,7 @@ export async function restoreBackup(json: string): Promise<RestoreResult> {
     const e = entry as Record<string, unknown>;
     const name = typeof e['originalName'] === 'string' ? (e['originalName'] as string) : 'unknown';
     const b64 = e['bytesB64'];
-    if (typeof b64 !== 'string' || b64.length === 0 || b64.length > MAX_B64_BYTES * 1.4) {
+    if (typeof b64 !== 'string' || b64.length === 0 || b64.length > Math.ceil((MAX_RAW_BYTES_PER_SONG * 4) / 3)) {
       result.failed.push({ name, reason: 'invalid entry' });
       continue;
     }

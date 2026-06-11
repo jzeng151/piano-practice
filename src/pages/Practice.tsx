@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { compileSong } from '../songs/compile';
 import type { CompiledSong, PracticeSong } from '../songs/types';
@@ -344,10 +344,9 @@ function RunningSession({
   onRestart: (c: PracticeConfig) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const controller = useMemo(
-    () => new PracticeController(compiled, config, getPiano()),
-    [compiled, config],
-  );
+  // One controller per mount — key={runKey} on this component guarantees a
+  // fresh instance per run, so config/compiled changes always remount.
+  const [controller] = useState(() => new PracticeController(compiled, config, getPiano()));
   const snap = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const [octaveBase, setOctaveBase] = useState(controller.songWindowBase);
 

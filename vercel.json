@@ -1,3 +1,15 @@
 {
-  "rewrites": [{ "source": "/((?!assets/|samples/|favicon).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!assets/|samples/|favicon).*)", "destination": "/index.html" }],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self'; connect-src 'self'; media-src 'self'"
+        }
+      ]
+    }
+  ]
 }

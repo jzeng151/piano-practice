@@ -182,6 +182,42 @@ describe('A-B loop', () => {
     expect(t).toBeLessThan(3);
   });
 
+  // NOTE: beats at 120 BPM = startBeat × 0.5 song-seconds; gates below sit at
+  // song-sec 0 and 1.5. Loop markers are in song-seconds.
+  it('wraps in wait mode when B sits at/before a gate start (review F1)', () => {
+    const { engine } = makeEngine([N(0, 1, 60), N(3, 1, 62)]); // gates at 0s, 1.5s
+    engine.start();
+    run(engine, 0, LEAD_MS + 50);
+    press(engine, 60);
+    release(engine, 60);
+    engine.setLoop(0.25, 1.5); // B exactly at the second gate's start
+    // without the wrap-before-gate fix the engine clamps at the gate forever
+    run(engine, LEAD_MS + 50, LEAD_MS + 8000);
+    const s = engine.getSnapshot();
+    expect(s.songTime).toBeLessThan(1.5);
+    expect(s.gatingGroup).not.toBe(1); // never armed the post-B gate
+  });
+
+  it('wrapping into a chord the user still holds requires fresh strikes (review F2)', () => {
+    const { engine } = makeEngine([N(0, 1, 60), N(2, 1, 62)]); // gates at 0s, 1.0s
+    engine.start();
+    run(engine, 0, LEAD_MS + 50);
+    press(engine, 60); // opens gate 0, KEEP HOLDING
+    engine.setLoop(0, 0.8); // wrap before the second gate
+    // loop wraps back across gate 0; the still-held key must not
+    // auto-satisfy the re-armed gate
+    run(engine, LEAD_MS + 50, LEAD_MS + 6000);
+    expect(engine.getSnapshot().state).toBe('waiting');
+    expect(engine.getSnapshot().gatingGroup).toBe(0);
+    expect(engine.getSnapshot().satisfied.size).toBe(0);
+    // fresh strike opens it again
+    release(engine, 60);
+    press(engine, 60);
+    run(engine, LEAD_MS + 6000, LEAD_MS + 6064);
+    expect(['playing', 'waiting']).toContain(engine.getSnapshot().state);
+    expect(engine.getSnapshot().songTime).toBeGreaterThan(0);
+  });
+
   it('wrapping while a gate is armed returns to playing (no stranded wait)', () => {
     const { engine } = makeEngine([N(0, 1, 60), N(2.9, 1, 62)]);
     engine.start();
