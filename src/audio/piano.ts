@@ -122,10 +122,35 @@ export class Piano {
 
   /** Must be called from a user gesture before first sound. */
   async resume(): Promise<void> {
-    if (this.context.state !== 'running') await this.context.resume();
+    if (this.context.state !== 'running') {
+      await this.context.resume().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Belt-and-braces: noteOn/pedal run synchronously inside real keydown
+   * handlers, which carry user activation — so a context that missed (or was
+   * denied) its first resume() recovers on the very next keypress instead of
+   * staying silent forever.
+   */
+  private ensureRunning(): void {
+    if (this.context.state !== 'running') {
+      void this.context.resume().catch(() => undefined);
+    }
+  }
+
+  /** Subscribe to context running/suspended changes (for the UI banner). */
+  onStateChange(listener: () => void): () => void {
+    this.context.addEventListener('statechange', listener);
+    return () => this.context.removeEventListener('statechange', listener);
+  }
+
+  isRunning(): boolean {
+    return this.context.state === 'running';
   }
 
   noteOn(midi: number, velocity: number): void {
+    this.ensureRunning();
     this.voices.noteOn(midi, velocity);
   }
 
@@ -134,6 +159,7 @@ export class Piano {
   }
 
   pedal(down: boolean): void {
+    this.ensureRunning();
     this.voices.pedal(down);
   }
 
@@ -143,6 +169,7 @@ export class Piano {
 
   /** Short metronome click; accented for the first beat of the bar. */
   click(accent: boolean, when = 0): void {
+    this.ensureRunning();
     const t = when > 0 ? when : this.context.currentTime;
     const osc = this.context.createOscillator();
     const gain = this.context.createGain();

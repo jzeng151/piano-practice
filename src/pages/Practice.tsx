@@ -16,6 +16,25 @@ import { getSong, getPieceSettings, putPieceSettings, getAppSettings, putAppSett
 
 type Phase = 'config' | 'running' | 'paused' | 'finished';
 
+/** True while the AudioContext is actually producing sound. */
+function useAudioRunning(): boolean {
+  const piano = getPiano();
+  return useSyncExternalStore(
+    (cb) => piano.onStateChange(cb),
+    () => piano.isRunning(),
+  );
+}
+
+function AudioBlockedBanner() {
+  const running = useAudioRunning();
+  if (running) return null;
+  return (
+    <p className="banner audio-blocked" role="alert">
+      🔇 The browser is blocking audio — press any key or click anywhere to enable sound.
+    </p>
+  );
+}
+
 export default function Practice() {
   const { songId } = useParams<{ songId: string }>();
   const navigate = useNavigate();
@@ -207,6 +226,7 @@ function ConfigPopover({
             <span className="composer"> — {compiled.song.composer || 'imported'}</span>
           </h1>
           {firstRun && <MappingDiagram />}
+          <AudioBlockedBanner />
           <p className="hint">
             The keyboard behind this dialog is live — try pressing some keys.
             {latency && (
@@ -405,6 +425,7 @@ function RunningSession({
           Pause (Esc)
         </button>
       </header>
+      <AudioBlockedBanner />
       <canvas ref={canvasRef} className="lane-canvas" />
       <div aria-live="polite" className="sr-only">
         {snap.state === 'waiting' && 'Waiting for the highlighted keys'}

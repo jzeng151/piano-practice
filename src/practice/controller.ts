@@ -16,6 +16,17 @@ export function getPiano(): Piano {
       pianoProgress = p;
       for (const l of progressListeners) l();
     });
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__piano = sharedPiano;
+    }
+    // Any real gesture re-arms a context the browser left (or put back into)
+    // suspended state. Early-returns once running, so the cost is a state read.
+    const piano = sharedPiano;
+    const tryResume = () => {
+      if (!piano.isRunning()) void piano.resume();
+    };
+    window.addEventListener('pointerdown', tryResume);
+    window.addEventListener('keydown', tryResume);
   }
   return sharedPiano;
 }

@@ -104,6 +104,11 @@ button.link {
   border-radius: var(--radius);
   padding: 0.6rem 1rem;
 }
+.banner.audio-blocked {
+  margin: 0;
+  border-radius: 0;
+  text-align: center;
+}
 
 /* Library */
 .song-list {
